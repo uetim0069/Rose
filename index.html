@@ -157,7 +157,9 @@ h3{margin:0 0 6px;font-size:clamp(12px,1.5vw,17px);line-height:1.15;font-weight:
  var vcs=[];function loadV(){try{vcs=speechSynthesis.getVoices()||[]}catch(e){}}loadV();try{speechSynthesis.onvoiceschanged=loadV}catch(e){}
  function pick(){var pr=[/Google UK English Male/i,/Daniel/i,/Arthur/i,/Oliver/i,/Ryan/i,/George/i,/Rishi/i],i,j;for(i=0;i<pr.length;i++)for(j=0;j<vcs.length;j++)if(pr[i].test(vcs[j].name)&&/^en/i.test(vcs[j].lang))return vcs[j];for(j=0;j<vcs.length;j++)if(/en-GB/i.test(vcs[j].lang))return vcs[j];return null}
  var speaking=false,spkId=0,conv=false,errN=0;
- function speak(s,done){var my=++spkId;var fin=function(){if(my!==spkId)return;orb.classList.remove('talk');speaking=false;if(done)done()};try{if(!voiceOn||!window.speechSynthesis||!s){fin();return}speechSynthesis.cancel();my=++spkId;var u=new SpeechSynthesisUtterance(s),v=pick();if(v){u.voice=v;u.lang=v.lang}else u.lang='en-GB';u.rate=.95;u.pitch=.8;u.onstart=function(){speaking=true;orb.classList.add('talk')};u.onend=u.onerror=fin;speechSynthesis.speak(u)}catch(e){fin()}}
+ var cur=null;
+ function unlock(){try{if(!window.speechSynthesis)return;var u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u)}catch(e){}}
+ function speak(s,done){var my=++spkId,timer=null,finished=false;var fin=function(){if(finished||my!==spkId)return;finished=true;clearTimeout(timer);orb.classList.remove('talk');speaking=false;if(done)done()};try{if(!voiceOn||!window.speechSynthesis||!s){fin();return}speechSynthesis.cancel();my=++spkId;var u=new SpeechSynthesisUtterance(s),v=pick();cur=u;if(v){u.voice=v;u.lang=v.lang}else u.lang='en-GB';u.rate=.95;u.pitch=.8;u.onstart=function(){clearTimeout(timer);speaking=true;orb.classList.add('talk')};u.onend=u.onerror=fin;setTimeout(function(){if(my!==spkId)return;try{speechSynthesis.resume();speechSynthesis.speak(u)}catch(e){fin()}},120);timer=setTimeout(function(){if(!speaking&&my===spkId){try{speechSynthesis.cancel()}catch(e){}say('NO VOICE HERE: TEXT ONLY');fin()}},3000)}catch(e){fin()}}
  bVoice.addEventListener('click',function(){voiceOn=!voiceOn;bVoice.setAttribute('aria-pressed',voiceOn);if(!voiceOn){try{speechSynthesis.cancel()}catch(e){}}});
  /* talk to ROSE */
  var PERSONA='You are ROSE, an AI butler in the manner of J.A.R.V.I.S. from Iron Man: impeccably polite, unflappable, efficient, with dry British wit and understated humour. Address the person as sir now and then (madam if they say so), confirm actions crisply (for example: very good, sir, bringing that up now), and gently tease when it suits. You live inside a sci-fi HUD. Reply in 1 to 3 short spoken-style sentences, plain text, no markdown, no lists. The screen can show a demo report about VR headset sales: end your reply with the exact marker [[REPORT]] when the person asks for a report, dashboard, charts or data on screen, and with [[CLEAR]] when they ask to clear it. The figures in that report are illustrative placeholders, so say so if asked about them. You have no live web access in this page; if asked for current facts, say what you know and note it may be out of date.';
@@ -165,7 +167,7 @@ h3{margin:0 0 6px;font-size:clamp(12px,1.5vw,17px);line-height:1.15;font-weight:
  function setKey(){var k=window.prompt('Paste your Anthropic API key (sk-ant-...). It is saved only in this browser.');if(k&&k.trim()){try{localStorage.setItem('rose_key',k.trim())}catch(e){}return k.trim()}return null}
  var hist=[],busy=false;
  async function ask(text){
-  text=(text||'').trim();if(!text||busy)return;busy=true;
+  text=(text||'').trim();if(!text||busy)return;busy=true;unlock();
   var key=null;try{key=localStorage.getItem('rose_key')}catch(e){}
   hint.classList.add('off');cap.hidden=false;capU.textContent='YOU: '+text;
   if(!key)key=setKey();
@@ -203,6 +205,7 @@ h3{margin:0 0 6px;font-size:clamp(12px,1.5vw,17px);line-height:1.15;font-weight:
   try{rec.start();listening=true;orb.classList.add('listen');micBtn.setAttribute('aria-pressed','true');say('LISTENING')}catch(e){listening=false;conv=false;micBtn.setAttribute('aria-pressed','false');say('MIC UNAVAILABLE')}
  }
  function mic(){
+  unlock();
   if(!SR){say('NO MIC SUPPORT: TYPE INSTEAD');q.focus();return}
   if(conv){conv=false;try{rec.abort()}catch(e){}try{speechSynthesis.cancel()}catch(e){}spkId++;speaking=false;orb.classList.remove('listen','talk');micBtn.setAttribute('aria-pressed','false');say('LISTENING OFF');return}
   conv=true;errN=0;startRec();
