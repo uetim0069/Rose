@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ROSE — Research HUD</title>
+<meta name="description" content="A voice-driven sci-fi research HUD powered by Claude.">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#04060c;--bg2:#0a1626;--cy:#5fd4ff;--cy-d:#1d5f80;--pk:#ff3d7f;--pk-d:#7a1238;--tx:#d8f3ff;--mut:#7fa6ba;
+ --ui:"Chakra Petch","Rajdhani",system-ui,sans-serif;--mono:"Share Tech Mono",ui-monospace,Menlo,monospace;
+ color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#04060c}}
+:root[data-theme="dark"]{--bg:#04060c}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(ellipse 70% 60% at 50% 45%,var(--bg2),var(--bg) 70%);color:var(--tx);font-family:var(--ui);overflow:hidden}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(95,212,255,.035) 0 1px,transparent 1px 3px)}
+.app{height:100%;display:flex;flex-direction:column;padding:10px 14px 12px}
+nav{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;font:11px var(--mono);letter-spacing:.08em}
+nav button,.go{background:transparent;color:var(--cy);border:1px solid var(--cy-d);padding:4px 10px;font:inherit;cursor:pointer}
+nav button:hover,.go:hover,nav button:focus-visible,.go:focus-visible{background:rgba(95,212,255,.14);outline:none;border-color:var(--cy)}
+nav button[aria-pressed="true"]{background:var(--cy);color:var(--bg)}
+.stage{flex:1;position:relative;min-height:0;margin:10px 0}
+/* panels */
+.grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(3,1fr);gap:10px}
+.p{position:relative;border:1px solid var(--cy);background:rgba(8,22,38,.82);padding:10px 12px;min-height:0;overflow:hidden;
+ box-shadow:0 0 14px rgba(95,212,255,.25),inset 0 0 18px rgba(95,212,255,.07);opacity:0;clip-path:inset(0 100% 0 0);transition:clip-path .6s cubic-bezier(.2,.7,.2,1),opacity .3s}
+.p.on{opacity:1;clip-path:inset(0 0 0 0)}
+.p::before,.p::after{content:"";position:absolute;width:9px;height:9px;border:2px solid var(--cy)}
+.p::before{left:-1px;top:-1px;border-right:0;border-bottom:0}.p::after{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.tag{font:9px var(--mono);color:var(--mut);letter-spacing:.1em;display:flex;justify-content:space-between;margin-bottom:6px}
+h3{margin:0 0 6px;font-size:clamp(12px,1.5vw,17px);line-height:1.15;font-weight:700;letter-spacing:.02em;text-transform:none}
+.p p{margin:0;font-size:clamp(10px,1vw,12px);line-height:1.35;color:var(--tx);opacity:.9}
+.a{grid-column:1/3}.b{grid-column:3/5}.c{grid-column:5/7}
+.d{grid-column:1/3}.e{grid-column:3/5}.i{grid-column:5/7}
+.f{grid-column:1/3}.g{grid-column:3/5}.h{grid-column:5/7}
+.img{padding:0;background:linear-gradient(135deg,#27374a,#6b5a46 55%,#b7a58a)}
+.img.c{background:linear-gradient(160deg,#e9e2d4 0%,#b9c6d0 40%,#8a6b52 100%)}
+.img.i{background:linear-gradient(120deg,#3a2a22,#b32a22 45%,#2b3a44)}
+.img.d{background:#e8ecef}
+.img svg{width:100%;height:100%;display:block}
+.cap{position:absolute;left:8px;bottom:6px;font:9px var(--mono);color:#fff;text-shadow:0 0 4px #000}
+.bars{display:flex;align-items:flex-end;gap:10px;height:calc(100% - 66px);padding:4px 6px 0;border-left:1px solid var(--cy-d);border-bottom:1px solid var(--cy-d)}
+.bars i{flex:1;background:var(--tx);height:0;transition:height .9s cubic-bezier(.2,.7,.2,1);position:relative}
+.on .bars i{height:var(--h)}
+.bars i:nth-child(2){transition-delay:.12s}.bars i:nth-child(3){transition-delay:.24s}.bars i:nth-child(4){transition-delay:.36s}.bars i:nth-child(5){transition-delay:.48s}
+.bcap{position:absolute;left:12px;right:12px;bottom:6px;font-size:9px;line-height:1.25;color:var(--mut)}
+.stat{display:flex;flex-direction:column;justify-content:center}
+.stat b{font-size:clamp(30px,5vw,56px);font-weight:700;color:var(--tx);line-height:1;text-shadow:0 0 18px rgba(95,212,255,.5)}
+/* orb */
+.orb{position:absolute;left:50%;top:50%;width:min(46vh,300px);aspect-ratio:1;transform:translate(-50%,-50%);cursor:pointer;transition:all 1s cubic-bezier(.6,0,.2,1);z-index:5;background:none;border:0;padding:0}
+.orb.docked{left:calc(100% - 38px);top:calc(100% - 38px);width:68px;transform:translate(-50%,-50%)}
+.orb svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 0 14px var(--pk))}
+.r1{transform-origin:50% 50%;animation:sp 14s linear infinite}.r2{transform-origin:50% 50%;animation:sp 9s linear infinite reverse}.r3{transform-origin:50% 50%;animation:sp 22s linear infinite}
+.pulse{transform-origin:50% 50%;animation:pu 2.6s ease-in-out infinite}
+.orb.busy .r1{animation-duration:1.2s}.orb.busy .r2{animation-duration:.8s}
+@keyframes sp{to{transform:rotate(360deg)}}@keyframes pu{50%{opacity:.45;transform:scale(1.04)}}
+.hint{position:absolute;left:50%;top:calc(50% + min(26vh,170px));transform:translateX(-50%);font:11px var(--mono);color:var(--mut);letter-spacing:.14em;transition:opacity .4s;text-align:center}
+.hint.off{opacity:0}
+/* prompt bar */
+.bar{display:flex;gap:8px;align-items:center;font:11px var(--mono)}
+.bar .st{width:8px;height:8px;background:var(--pk);box-shadow:0 0 8px var(--pk);flex:none}
+.bar input{flex:1;min-width:0;background:rgba(8,22,38,.7);border:1px solid var(--cy-d);color:var(--tx);padding:6px 10px;font:inherit}
+.bar input:focus{outline:none;border-color:var(--cy)}
+.log{color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%}
+.orb.listen svg{filter:drop-shadow(0 0 30px var(--cy))}
+.orb.listen .pulse{animation-duration:.8s}
+.orb.talk .pulse{animation-duration:.45s}.orb.talk .r2{animation-duration:2s}.orb.talk svg{filter:drop-shadow(0 0 26px var(--pk))}
+.cap2{position:absolute;left:0;right:84px;bottom:0;z-index:6;background:rgba(4,10,20,.88);border:1px solid var(--cy-d);padding:8px 12px;max-height:46%;overflow:auto}
+.cap2[hidden]{display:none}
+.cap2 .u{font:11px var(--mono);color:var(--mut);margin-bottom:4px}
+.cap2 .r{font-size:clamp(12px,1.5vw,15px);line-height:1.4}
+.go[aria-pressed="true"]{background:var(--cy);color:var(--bg)}
+.clear .p{background:rgba(8,22,38,.2)}
+@media (max-width:720px){
+ body{overflow:auto}.app{min-height:100%;height:auto}.stage{min-height:1500px}
+ .grid{grid-template-columns:repeat(2,1fr);grid-template-rows:none;grid-auto-rows:150px}
+ .a,.b,.c,.d,.e,.f,.g,.h,.i{grid-column:auto}.log{display:none}
+ .orb{width:200px;top:200px}.hint{top:340px}
+}
+@media (prefers-reduced-motion:reduce){.r1,.r2,.r3,.pulse{animation:none}.p,.bars i,.orb{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+ <nav aria-label="Views">
+  <button id="bHist">HISTORY</button><button id="bText" aria-pressed="true">TEXT</button><button id="bClear" aria-pressed="false">CLEAR VIEW</button><button id="bKey">KEY</button><button id="bVoice" aria-pressed="true">VOICE</button><button id="bReset">REPORT</button>
+ </nav>
+
+ <div class="stage" id="stage">
+  <div class="grid" id="grid">
+   <section class="p a"><div class="tag"><span>SECTION 01</span><span>SHIPPED</span></div><h3>Meta Quest 3S / Quest 3 — shipped</h3><p>The Quest 3S launched at $299 and Quest 3 stays on shelves at $499. Both run the same chipset and share one game library.</p></section>
+   <section class="p b"><div class="tag"><span>SECTION 02</span><span>HITS</span></div><h3>Hits: social, sandbox, fitness and rhythm</h3><p>Social worlds, building sandboxes, workout apps and rhythm games lead engagement. Short sessions and friends in the room drive repeat use.</p></section>
+   <section class="p img c" aria-label="Rooftop view"><svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid slice"><rect width="200" height="100" fill="#cfd9df"/><rect x="20" y="30" width="46" height="70" fill="#c9b79c"/><rect x="26" y="38" width="8" height="12" fill="#6d5d4a"/><rect x="42" y="38" width="8" height="12" fill="#6d5d4a"/><rect x="70" y="50" width="60" height="50" fill="#a88f74"/><polygon points="30,30 43,12 56,30" fill="#7c4f3d"/><rect x="140" y="10" width="60" height="6" fill="#4d6b7c"/><rect x="0" y="80" width="200" height="20" fill="#8a6b52"/></svg><span class="cap">VR PASSTHROUGH</span></section>
+
+   <section class="p img d" aria-label="Headset"><svg viewBox="0 0 200 100"><rect width="200" height="100" fill="#eef1f3"/><rect x="60" y="30" width="80" height="38" rx="14" fill="#1b1e24"/><rect x="66" y="36" width="68" height="20" rx="8" fill="#2d333c"/><ellipse cx="36" cy="64" rx="14" ry="9" fill="#1b1e24"/><ellipse cx="164" cy="64" rx="14" ry="9" fill="#1b1e24"/></svg></section>
+   <section class="p e"><div class="tag"><span>CHART A</span><span>UNITS</span></div><div class="bars"><i style="--h:92%"></i><i style="--h:30%"></i><i style="--h:18%"></i><i style="--h:8%"></i></div><div class="bcap">Quest sales dominate; every rival sits far behind.</div></section>
+   <section class="p img i" aria-label="Robot arm"><svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid slice"><rect x="60" y="20" width="14" height="70" fill="#d8332a"/><rect x="60" y="20" width="60" height="12" fill="#d8332a"/><circle cx="68" cy="26" r="9" fill="#2a2f36"/><rect x="118" y="20" width="10" height="40" fill="#8f1d18"/><circle cx="123" cy="64" r="7" fill="#2a2f36"/></svg><span class="cap">HARDWARE LAB</span></section>
+
+   <section class="p f"><div class="tag"><span>CHART B</span><span>REVENUE</span></div><div class="bars"><i style="--h:95%"></i><i style="--h:96%"></i><i style="--h:40%"></i><i style="--h:22%"></i><i style="--h:12%"></i></div><div class="bcap">Hardware revenue is flat; software is the growth line.</div></section>
+   <section class="p g"><div class="tag"><span>CHART C</span><span>APPS</span></div><div class="bars"><i style="--h:90%"></i><i style="--h:84%"></i><i style="--h:55%"></i><i style="--h:35%"></i><i style="--h:20%"></i></div><div class="bcap">Top five categories by monthly active users.</div></section>
+   <section class="p h stat"><div class="tag"><span>FIGURE</span><span>FACT</span></div><b>≈20m</b><p>Headsets sold cumulatively by early 2026 (illustrative placeholder).</p></section>
+  </div>
+
+  <button class="orb" id="orb" aria-label="Ask ROSE for a report">
+   <svg viewBox="-100 -100 200 200">
+    <circle class="pulse" r="62" fill="none" stroke="#ff3d7f" stroke-width="9" opacity=".9"/>
+    <circle r="62" fill="rgba(255,61,127,.08)" stroke="#ffd0e0" stroke-width="1.4"/>
+    <g class="r1"><circle r="80" fill="none" stroke="#ff7aa6" stroke-width="1.4" stroke-dasharray="3 7"/><circle cx="0" cy="-80" r="3" fill="#fff"/><circle cx="56" cy="57" r="2.4" fill="#ff7aa6"/></g>
+    <g class="r2"><circle r="92" fill="none" stroke="#5fd4ff" stroke-width="1" stroke-dasharray="40 14 6 14" opacity=".7"/><circle cx="92" cy="0" r="2.6" fill="#5fd4ff"/></g>
+    <g class="r3"><path d="M-70 0H-52M52 0H70M0 -70V-52M0 52V70" stroke="#ffd0e0" stroke-width="1.6"/></g>
+    <text x="0" y="9" text-anchor="middle" font-family="Chakra Petch,sans-serif" font-weight="700" font-style="italic" font-size="30" fill="#fff" stroke="#ff3d7f" stroke-width=".8" letter-spacing="1">ROSE</text>
+   </svg>
+  </button>
+  <div class="hint" id="hint">TAP ROSE ONCE TO KEEP LISTENING, OR TYPE BELOW</div>
+  <div class="cap2" id="cap" hidden><div class="u" id="capU"></div><div class="r" id="capR"></div></div>
+ </div>
+
+ <div class="bar">
+  <span class="st" id="st"></span>
+  <input id="q" placeholder="Talk to ROSE" aria-label="Message ROSE" spellcheck="false" autocomplete="off">
+  <button class="go" id="mic" aria-pressed="false">MIC</button><button class="go" id="go">SEND</button>
+  <span class="log" id="log">STANDBY</span>
+ </div>
+</div>
+
+<script>
+(function(){
+ var orb=document.getElementById('orb'),hint=document.getElementById('hint'),log=document.getElementById('log'),
+  q=document.getElementById('q'),panels=[].slice.call(document.querySelectorAll('.p')),stage=document.getElementById('stage'),
+  cap=document.getElementById('cap'),capU=document.getElementById('capU'),capR=document.getElementById('capR'),
+  micBtn=document.getElementById('mic'),state='idle',timers=[];
+ var order=['a','b','c','d','e','i','f','g','h'];
+ var steps=['PARSING REQUEST','SCANNING SOURCES','CROSS-CHECKING FIGURES','COMPOSING REPORT'];
+ function t(fn,ms){timers.push(setTimeout(fn,ms))}
+ function say(s){log.textContent=s}
+ function run(){
+  if(state!=='idle')return 'The report is already on screen.';
+  state='busy';orb.classList.add('busy');hint.classList.add('off');
+  steps.forEach(function(s,i){t(function(){say(s)},i*900)});
+  t(function(){orb.classList.remove('busy');orb.classList.add('docked');say('REPORT READY')},3600);
+  order.forEach(function(k,i){t(function(){var el=document.querySelector('.p.'+k);if(el)el.classList.add('on')},4300+i*330)});
+  t(function(){state='done'},4300+order.length*330);
+  return 'The report panels are now loading on screen.';
+ }
+ function reset(){
+  timers.forEach(clearTimeout);timers=[];
+  panels.forEach(function(p){p.classList.remove('on')});
+  orb.classList.remove('docked','busy');say('STANDBY');state='idle';
+  if(cap.hidden)hint.classList.remove('off');
+  return 'The report has been cleared.';
+ }
+ /* voice out */
+ var voiceOn=true,bVoice=document.getElementById('bVoice');
+ var vcs=[];function loadV(){try{vcs=speechSynthesis.getVoices()||[]}catch(e){}}loadV();try{speechSynthesis.onvoiceschanged=loadV}catch(e){}
+ function pick(){var pr=[/Google UK English Male/i,/Daniel/i,/Arthur/i,/Oliver/i,/Ryan/i,/George/i,/Rishi/i],i,j;for(i=0;i<pr.length;i++)for(j=0;j<vcs.length;j++)if(pr[i].test(vcs[j].name)&&/^en/i.test(vcs[j].lang))return vcs[j];for(j=0;j<vcs.length;j++)if(/en-GB/i.test(vcs[j].lang))return vcs[j];return null}
+ var speaking=false,spkId=0,conv=false,errN=0;
+ function speak(s,done){var my=++spkId;var fin=function(){if(my!==spkId)return;orb.classList.remove('talk');speaking=false;if(done)done()};try{if(!voiceOn||!window.speechSynthesis||!s){fin();return}speechSynthesis.cancel();my=++spkId;var u=new SpeechSynthesisUtterance(s),v=pick();if(v){u.voice=v;u.lang=v.lang}else u.lang='en-GB';u.rate=.95;u.pitch=.8;u.onstart=function(){speaking=true;orb.classList.add('talk')};u.onend=u.onerror=fin;speechSynthesis.speak(u)}catch(e){fin()}}
+ bVoice.addEventListener('click',function(){voiceOn=!voiceOn;bVoice.setAttribute('aria-pressed',voiceOn);if(!voiceOn){try{speechSynthesis.cancel()}catch(e){}}});
+ /* talk to ROSE */
+ var PERSONA='You are ROSE, an AI butler in the manner of J.A.R.V.I.S. from Iron Man: impeccably polite, unflappable, efficient, with dry British wit and understated humour. Address the person as sir now and then (madam if they say so), confirm actions crisply (for example: very good, sir, bringing that up now), and gently tease when it suits. You live inside a sci-fi HUD. Reply in 1 to 3 short spoken-style sentences, plain text, no markdown, no lists. The screen can show a demo report about VR headset sales: end your reply with the exact marker [[REPORT]] when the person asks for a report, dashboard, charts or data on screen, and with [[CLEAR]] when they ask to clear it. The figures in that report are illustrative placeholders, so say so if asked about them. You have no live web access in this page; if asked for current facts, say what you know and note it may be out of date.';
+ var MODEL='claude-sonnet-5-5';
+ function setKey(){var k=window.prompt('Paste your Anthropic API key (sk-ant-...). It is saved only in this browser.');if(k&&k.trim()){try{localStorage.setItem('rose_key',k.trim())}catch(e){}return k.trim()}return null}
+ var hist=[],busy=false;
+ async function ask(text){
+  text=(text||'').trim();if(!text||busy)return;busy=true;
+  var key=null;try{key=localStorage.getItem('rose_key')}catch(e){}
+  hint.classList.add('off');cap.hidden=false;capU.textContent='YOU: '+text;
+  if(!key)key=setKey();
+  if(!key){capR.textContent='ROSE needs an Anthropic API key to think. Tap KEY to add one.';say('NO KEY');busy=false;conv=false;micBtn.setAttribute('aria-pressed','false');return}
+  q.value='';orb.classList.add('busy');say('THINKING');capR.textContent='…';
+  var msgs=hist.slice(-8).map(function(m){return{role:m.role,content:m.content}}).concat([{role:'user',content:text}]);
+  try{
+   var r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:MODEL,max_tokens:300,system:PERSONA,messages:msgs})});
+   if(!r.ok){var er=new Error('http');er.status=r.status;throw er}
+   var data=await r.json();
+   var out=(data.content||[]).map(function(c){return c.text||''}).join('').trim();
+   if(/\[\[REPORT\]\]/.test(out))run();
+   if(/\[\[CLEAR\]\]/.test(out))reset();
+   out=out.replace(/\[\[(REPORT|CLEAR)\]\]/g,'').trim();
+   capR.textContent=out;
+   hist.push({role:'user',content:text},{role:'assistant',content:out});
+   say('READY');speak(out,resume);
+  }catch(e){
+   capR.textContent=e.status===401?'That API key was rejected. Tap KEY to enter a new one.':e.status===429?'Too many requests. Try again in a moment.':e.status?'The API returned an error ('+e.status+').':'Could not reach the API. Check your connection.';
+   say('ERROR');resume();
+  }
+  busy=false;if(state!=='busy')orb.classList.remove('busy');
+ }
+ /* mic in */
+ var SR=window.SpeechRecognition||window.webkitSpeechRecognition,rec=null,listening=false;
+ function resume(){setTimeout(function(){if(conv&&!busy&&!listening&&!speaking)startRec()},350)}
+ function startRec(){
+  if(!SR||listening)return;
+  try{speechSynthesis.cancel()}catch(e){}
+  rec=new SR();rec.lang=navigator.language||'en-US';rec.interimResults=true;rec.continuous=false;
+  rec.onresult=function(e){errN=0;var s='';for(var i=0;i<e.results.length;i++)s+=e.results[i][0].transcript;q.value=s;
+   if(e.results[e.results.length-1].isFinal){var v=s;q.value='';ask(v)}};
+  rec.onerror=function(e){var c=String(e.error||'error');if(c==='not-allowed'||c==='service-not-allowed'){conv=false;say('MIC BLOCKED: TYPE INSTEAD')}else if(c!=='no-speech'&&c!=='aborted'){say('MIC '+c.toUpperCase().replace(/-/g,' '));errN++}if(errN>3)conv=false};
+  rec.onend=function(){listening=false;orb.classList.remove('listen');if(conv){if(!busy&&!speaking)resume()}else micBtn.setAttribute('aria-pressed','false')};
+  try{rec.start();listening=true;orb.classList.add('listen');micBtn.setAttribute('aria-pressed','true');say('LISTENING')}catch(e){listening=false;conv=false;micBtn.setAttribute('aria-pressed','false');say('MIC UNAVAILABLE')}
+ }
+ function mic(){
+  if(!SR){say('NO MIC SUPPORT: TYPE INSTEAD');q.focus();return}
+  if(conv){conv=false;try{rec.abort()}catch(e){}try{speechSynthesis.cancel()}catch(e){}spkId++;speaking=false;orb.classList.remove('listen','talk');micBtn.setAttribute('aria-pressed','false');say('LISTENING OFF');return}
+  conv=true;errN=0;startRec();
+ }
+ orb.addEventListener('click',mic);micBtn.addEventListener('click',mic);
+ document.getElementById('go').addEventListener('click',function(){ask(q.value)});
+ q.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();ask(q.value)}});
+ document.getElementById('bReset').addEventListener('click',function(){state==='idle'?run():state==='done'&&reset()});
+ document.getElementById('bKey').addEventListener('click',function(){var k=setKey();say(k?'KEY SAVED':'KEY UNCHANGED')});
+ document.getElementById('bHist').addEventListener('click',function(){say('HISTORY: '+Math.floor(hist.length/2)+' EXCHANGES')});
+ var bt=document.getElementById('bText'),bc=document.getElementById('bClear');
+ bt.addEventListener('click',function(){var on=bt.getAttribute('aria-pressed')!=='true';bt.setAttribute('aria-pressed',on);document.querySelectorAll('.p p,.p h3').forEach(function(n){n.style.visibility=on?'visible':'hidden'})});
+ bc.addEventListener('click',function(){var on=bc.getAttribute('aria-pressed')!=='true';bc.setAttribute('aria-pressed',on);stage.classList.toggle('clear',on)});
+ t(function(){if(state==='idle'&&!busy)say('AWAITING INPUT')},1500);
+})();
+</script>
+</body>
+</html>
